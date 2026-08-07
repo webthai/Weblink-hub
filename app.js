@@ -7,7 +7,7 @@
 
 // ⚠️ ตั้งค่าตรงนี้ครั้งเดียว: ใส่ Web App URL ที่ได้จากการ Deploy Google Apps Script
 // เมื่อใส่ค่าตรงนี้แล้ว ทุกเครื่อง/เบราว์เซอร์ที่เปิดไฟล์นี้จะใช้ URL เดียวกันทันที ไม่ต้องตั้งค่าใหม่
-const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwIAMF5fQgpstdLaDzNit6Ixd0VZ2squ4SFwRqH6HnKkxo6-LBAM1kUNOFkkwbZn5LN/exec";
+const DEFAULT_SCRIPT_URL = "PASTE_YOUR_WEB_APP_URL_HERE";
 
 const STORAGE_KEYS = {
   scriptUrl: "linkhub_script_url",
@@ -19,6 +19,7 @@ let SCRIPT_URL = resolveScriptUrl_();
 let currentToken = localStorage.getItem(STORAGE_KEYS.token) || null;
 let currentUser = safeParse_(localStorage.getItem(STORAGE_KEYS.user));
 let allLinks = [];
+let searchQuery = "";
 
 // ===================== INIT =====================
 document.addEventListener("DOMContentLoaded", () => {
@@ -125,6 +126,16 @@ function renderAuthUI_() {
   }
 }
 
+function getFilteredLinks_() {
+  if (!searchQuery) return allLinks;
+  const q = searchQuery.toLowerCase();
+  return allLinks.filter(link =>
+    (link.title || "").toLowerCase().includes(q) ||
+    (link.description || "").toLowerCase().includes(q) ||
+    (link.url || "").toLowerCase().includes(q)
+  );
+}
+
 function renderLinks_() {
   const grid = document.getElementById("linksGrid");
   const emptyState = document.getElementById("emptyState");
@@ -135,36 +146,78 @@ function renderLinks_() {
   loadingState.classList.add("hidden");
   grid.innerHTML = "";
 
-  linkCount.textContent = allLinks.length ? `${allLinks.length} ลิงก์` : "";
-  emptyState.classList.toggle("hidden", allLinks.length !== 0);
+  const filtered = getFilteredLinks_();
+
+  linkCount.textContent = allLinks.length ? `${filtered.length} / ${allLinks.length} ลิงก์` : "";
+  emptyState.classList.toggle("hidden", filtered.length !== 0);
+  emptyState.textContent = allLinks.length === 0
+    ? "ยังไม่มีลิงก์ในระบบ"
+    : "ไม่พบลิงก์ที่ตรงกับคำค้นหา";
 
   const isAdmin = currentUser && currentUser.role === "admin";
   let latest = null;
 
   allLinks.forEach(link => {
     if (!latest || new Date(link.updatedAt) > new Date(latest)) latest = link.updatedAt;
-    grid.appendChild(buildLinkCard_(link, isAdmin));
   });
+  filtered.forEach(link => grid.appendChild(buildLinkCard_(link, isAdmin)));
 
   lastUpdated.textContent = latest ? formatThaiDate_(latest) : "-";
+}
+
+function getDomain_(url) {
+  try { return new URL(url).hostname; } catch (e) { return ""; }
+}
+
+function openLink_(url) {
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 function buildLinkCard_(link, isAdmin) {
   const card = document.createElement("div");
   card.className = "link-card";
+  card.title = "เปิด " + link.url;
+  card.addEventListener("click", () => openLink_(link.url));
 
-  const title = document.createElement("a");
-  title.href = link.url;
-  title.target = "_blank";
-  title.rel = "noopener noreferrer";
+  const head = document.createElement("div");
+  head.className = "link-card-head";
+
+  const favicon = document.createElement("div");
+  favicon.className = "link-card-favicon";
+  const domain = getDomain_(link.url);
+  if (domain) {
+    const img = document.createElement("img");
+    img.src = `https://www.google.com/s2/favicons?sz=64&domain=${domain}`;
+    img.alt = "";
+    img.loading = "lazy";
+    img.onerror = () => { favicon.textContent = "🔗"; };
+    favicon.appendChild(img);
+  } else {
+    favicon.textContent = "🔗";
+  }
+  head.appendChild(favicon);
+
+  const titleWrap = document.createElement("div");
+  titleWrap.className = "link-card-titlewrap";
+
+  const title = document.createElement("span");
   title.className = "link-card-title";
   title.textContent = link.title;
-  card.appendChild(title);
+  titleWrap.appendChild(title);
 
-  const urlEl = document.createElement("div");
+  const urlEl = document.createElement("span");
   urlEl.className = "link-card-url";
-  urlEl.textContent = link.url;
-  card.appendChild(urlEl);
+  urlEl.textContent = domain || link.url;
+  titleWrap.appendChild(urlEl);
+
+  head.appendChild(titleWrap);
+
+  const openIcon = document.createElement("span");
+  openIcon.className = "link-card-open";
+  openIcon.textContent = "↗";
+  head.appendChild(openIcon);
+
+  card.appendChild(head);
 
   if (link.description) {
     const desc = document.createElement("div");
@@ -185,12 +238,12 @@ function buildLinkCard_(link, isAdmin) {
     const editBtn = document.createElement("button");
     editBtn.className = "btn-icon";
     editBtn.textContent = "✏️ แก้ไข";
-    editBtn.onclick = () => startEditLink_(link);
+    editBtn.onclick = (e) => { e.stopPropagation(); startEditLink_(link); };
 
     const delBtn = document.createElement("button");
     delBtn.className = "btn-icon danger";
     delBtn.textContent = "🗑️ ลบ";
-    delBtn.onclick = () => deleteLink_(link);
+    delBtn.onclick = (e) => { e.stopPropagation(); deleteLink_(link); };
 
     actions.appendChild(editBtn);
     actions.appendChild(delBtn);
@@ -220,6 +273,10 @@ function bindStaticEvents_() {
   document.getElementById("linkForm").addEventListener("submit", handleLinkFormSubmit_);
   document.getElementById("linkFormCancel").addEventListener("click", resetLinkForm_);
   document.getElementById("configForm").addEventListener("submit", handleConfigSubmit_);
+  document.getElementById("searchInput").addEventListener("input", (e) => {
+    searchQuery = e.target.value.trim();
+    renderLinks_();
+  });
 }
 
 function toggleModal_(id, show) {

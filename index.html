@@ -4,6 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Link Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -52,7 +55,14 @@
         <h2 class="section-title">ลิงก์ทั้งหมด</h2>
         <span id="linkCount" class="link-count"></span>
       </div>
-      <div id="loadingState" class="loading-state">กำลังโหลด...</div>
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" class="search-input" placeholder="ค้นหาลิงก์..." />
+      </div>
+      <div id="loadingState" class="loading-state">
+        <div class="spinner"></div>
+        <span>กำลังโหลด...</span>
+      </div>
       <div id="emptyState" class="empty-state hidden">ยังไม่มีลิงก์ในระบบ</div>
       <div id="linksGrid" class="links-grid"></div>
     </section>
