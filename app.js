@@ -7,7 +7,7 @@
 
 // ⚠️ ตั้งค่าตรงนี้ครั้งเดียว: ใส่ Web App URL ที่ได้จากการ Deploy Google Apps Script
 // เมื่อใส่ค่าตรงนี้แล้ว ทุกเครื่อง/เบราว์เซอร์ที่เปิดไฟล์นี้จะใช้ URL เดียวกันทันที ไม่ต้องตั้งค่าใหม่
-const DEFAULT_SCRIPT_URL = "PASTE_YOUR_WEB_APP_URL_HERE";
+const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwIAMF5fQgpstdLaDzNit6Ixd0VZ2squ4SFwRqH6HnKkxo6-LBAM1kUNOFkkwbZn5LN/exec";
 
 const STORAGE_KEYS = {
   scriptUrl: "linkhub_script_url",
