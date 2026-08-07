@@ -8,6 +8,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
+<script>
+  // ตั้งค่าธีม (light/dark) ก่อนหน้าเว็บ render เพื่อไม่ให้กระพริบสีตอนโหลด
+  (function () {
+    var saved = localStorage.getItem('linkhub_theme');
+    var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
 </head>
 <body>
 
@@ -15,6 +23,7 @@
     <div class="topbar-inner">
       <h1 class="brand" id="siteTitle">🔗 Link Hub</h1>
       <div class="topbar-actions">
+        <button id="themeToggleBtn" class="btn-icon-round" title="สลับธีมสว่าง/มืด">🌙</button>
         <span id="userBadge" class="user-badge hidden"></span>
         <button id="loginBtn" class="btn btn-outline">Login</button>
         <button id="logoutBtn" class="btn btn-outline hidden">Logout</button>
@@ -47,6 +56,13 @@
         </div>
         <p id="linkFormError" class="form-error hidden"></p>
       </form>
+      <p class="admin-hint">💡 โหมด admin: ลากการ์ดเพื่อจัดลำดับเองได้ และกด 📌 เพื่อปักหมุดลิงก์สำคัญไว้บนสุด</p>
+    </section>
+
+    <!-- ===== ลิงก์ที่ปักหมุด ===== -->
+    <section id="pinnedSection" class="pinned-section hidden">
+      <h2 class="section-subtitle">📌 ปักหมุด</h2>
+      <div id="pinnedGrid" class="links-grid"></div>
     </section>
 
     <!-- ===== Dashboard: แสดงลิงก์ทั้งหมด ===== -->

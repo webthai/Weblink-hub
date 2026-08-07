@@ -3,16 +3,17 @@
  *  - เรียก Apps Script Web App เป็น "database" ผ่าน fetch
  *  - โหลดข้อมูลครั้งแรกด้วย action เดียว (bootstrap) เพื่อความเร็ว
  *  - login แบบ hash รหัสผ่านด้วย SHA-256 ก่อนส่งเสมอ ไม่ส่ง plaintext
+ *  - รองรับ: คัดลอกลิงก์, dark mode, ปักหมุด/ลากจัดลำดับเอง (admin)
  * ============================================================ */
 
 // ⚠️ ตั้งค่าตรงนี้ครั้งเดียว: ใส่ Web App URL ที่ได้จากการ Deploy Google Apps Script
-// เมื่อใส่ค่าตรงนี้แล้ว ทุกเครื่อง/เบราว์เซอร์ที่เปิดไฟล์นี้จะใช้ URL เดียวกันทันที ไม่ต้องตั้งค่าใหม่
 const DEFAULT_SCRIPT_URL = "PASTE_YOUR_WEB_APP_URL_HERE";
 
 const STORAGE_KEYS = {
   scriptUrl: "linkhub_script_url",
   token: "linkhub_token",
-  user: "linkhub_user"
+  user: "linkhub_user",
+  theme: "linkhub_theme"
 };
 
 let SCRIPT_URL = resolveScriptUrl_();
@@ -24,6 +25,7 @@ let searchQuery = "";
 // ===================== INIT =====================
 document.addEventListener("DOMContentLoaded", () => {
   bindStaticEvents_();
+  syncThemeButton_();
   if (!SCRIPT_URL || SCRIPT_URL.indexOf("PASTE_YOUR_WEB_APP_URL_HERE") !== -1) {
     showConfigModal_();
     return;
@@ -45,7 +47,6 @@ function safeParse_(str) {
 }
 
 // ===================== API CALL =====================
-// ใช้ Content-Type: text/plain เพื่อเลี่ยง CORS preflight (Apps Script ไม่รองรับ OPTIONS)
 async function apiCall(action, payload) {
   const body = Object.assign({ action }, payload || {});
   if (currentToken) body.token = currentToken;
@@ -69,7 +70,7 @@ async function sha256Hex(message) {
   return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-// ===================== BOOTSTRAP (single call for initial load) =====================
+// ===================== BOOTSTRAP =====================
 async function bootstrap_() {
   setLoading_(true);
   try {
@@ -79,7 +80,6 @@ async function bootstrap_() {
       currentUser = data.user;
       localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(currentUser));
     } else {
-      // token หมดอายุหรือไม่ถูกต้อง -> เคลียร์สถานะ login ฝั่ง frontend
       currentUser = null;
       currentToken = null;
       localStorage.removeItem(STORAGE_KEYS.token);
@@ -88,7 +88,7 @@ async function bootstrap_() {
     renderAll_();
   } catch (err) {
     console.error(err);
-    document.getElementById("loadingState").textContent =
+    document.getElementById("loadingState").innerHTML =
       "โหลดข้อมูลไม่สำเร็จ: " + err.message;
   } finally {
     setLoading_(false);
@@ -96,8 +96,58 @@ async function bootstrap_() {
 }
 
 function setLoading_(isLoading) {
-  const el = document.getElementById("loadingState");
-  el.classList.toggle("hidden", !isLoading && allLinks.length >= 0);
+  document.getElementById("loadingState").classList.toggle("hidden", !isLoading);
+}
+
+// ===================== THEME (dark mode) =====================
+function syncThemeButton_() {
+  const theme = document.documentElement.getAttribute("data-theme") || "light";
+  const btn = document.getElementById("themeToggleBtn");
+  if (btn) btn.textContent = theme === "dark" ? "☀️" : "🌙";
+}
+
+function toggleTheme_() {
+  const current = document.documentElement.getAttribute("data-theme") || "light";
+  const next = current === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem(STORAGE_KEYS.theme, next);
+  syncThemeButton_();
+}
+
+// ===================== TOAST =====================
+let toastTimer_ = null;
+function showToast_(message) {
+  let toast = document.getElementById("toast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "toast";
+    toast.className = "toast";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.classList.add("show");
+  clearTimeout(toastTimer_);
+  toastTimer_ = setTimeout(() => toast.classList.remove("show"), 1800);
+}
+
+async function copyToClipboard_(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    showToast_("คัดลอกลิงก์แล้ว ✅");
+  } catch (err) {
+    showToast_("คัดลอกไม่สำเร็จ ❌");
+  }
 }
 
 // ===================== RENDER =====================
@@ -137,16 +187,19 @@ function getFilteredLinks_() {
 }
 
 function renderLinks_() {
+  const pinnedSection = document.getElementById("pinnedSection");
+  const pinnedGrid = document.getElementById("pinnedGrid");
   const grid = document.getElementById("linksGrid");
   const emptyState = document.getElementById("emptyState");
-  const loadingState = document.getElementById("loadingState");
   const linkCount = document.getElementById("linkCount");
   const lastUpdated = document.getElementById("lastUpdated");
 
-  loadingState.classList.add("hidden");
+  pinnedGrid.innerHTML = "";
   grid.innerHTML = "";
 
   const filtered = getFilteredLinks_();
+  const pinned = filtered.filter(l => l.pinned);
+  const unpinned = filtered.filter(l => !l.pinned);
 
   linkCount.textContent = allLinks.length ? `${filtered.length} / ${allLinks.length} ลิงก์` : "";
   emptyState.classList.toggle("hidden", filtered.length !== 0);
@@ -154,14 +207,21 @@ function renderLinks_() {
     ? "ยังไม่มีลิงก์ในระบบ"
     : "ไม่พบลิงก์ที่ตรงกับคำค้นหา";
 
-  const isAdmin = currentUser && currentUser.role === "admin";
-  let latest = null;
+  const isAdmin = !!(currentUser && currentUser.role === "admin");
 
+  pinnedSection.classList.toggle("hidden", pinned.length === 0);
+  pinned.forEach(link => pinnedGrid.appendChild(buildLinkCard_(link, isAdmin)));
+  unpinned.forEach(link => grid.appendChild(buildLinkCard_(link, isAdmin)));
+
+  if (isAdmin) {
+    enableDragAndDrop_(pinnedGrid);
+    enableDragAndDrop_(grid);
+  }
+
+  let latest = null;
   allLinks.forEach(link => {
     if (!latest || new Date(link.updatedAt) > new Date(latest)) latest = link.updatedAt;
   });
-  filtered.forEach(link => grid.appendChild(buildLinkCard_(link, isAdmin)));
-
   lastUpdated.textContent = latest ? formatThaiDate_(latest) : "-";
 }
 
@@ -177,7 +237,16 @@ function buildLinkCard_(link, isAdmin) {
   const card = document.createElement("div");
   card.className = "link-card";
   card.title = "เปิด " + link.url;
+  card.dataset.id = link.id;
+  card.draggable = isAdmin;
   card.addEventListener("click", () => openLink_(link.url));
+
+  if (link.pinned) {
+    const badge = document.createElement("span");
+    badge.className = "pin-indicator";
+    badge.textContent = "📌 ปักหมุด";
+    card.appendChild(badge);
+  }
 
   const head = document.createElement("div");
   head.className = "link-card-head";
@@ -212,8 +281,16 @@ function buildLinkCard_(link, isAdmin) {
 
   head.appendChild(titleWrap);
 
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.className = "link-card-iconbtn link-card-copy";
+  copyBtn.title = "คัดลอกลิงก์";
+  copyBtn.textContent = "📋";
+  copyBtn.onclick = (e) => { e.stopPropagation(); copyToClipboard_(link.url); };
+  head.appendChild(copyBtn);
+
   const openIcon = document.createElement("span");
-  openIcon.className = "link-card-open";
+  openIcon.className = "link-card-iconbtn link-card-open";
   openIcon.textContent = "↗";
   head.appendChild(openIcon);
 
@@ -235,6 +312,11 @@ function buildLinkCard_(link, isAdmin) {
     const actions = document.createElement("div");
     actions.className = "link-card-admin-actions";
 
+    const pinBtn = document.createElement("button");
+    pinBtn.className = "btn-icon";
+    pinBtn.textContent = link.pinned ? "📌 เลิกปักหมุด" : "📌 ปักหมุด";
+    pinBtn.onclick = (e) => { e.stopPropagation(); togglePin_(link); };
+
     const editBtn = document.createElement("button");
     editBtn.className = "btn-icon";
     editBtn.textContent = "✏️ แก้ไข";
@@ -245,6 +327,7 @@ function buildLinkCard_(link, isAdmin) {
     delBtn.textContent = "🗑️ ลบ";
     delBtn.onclick = (e) => { e.stopPropagation(); deleteLink_(link); };
 
+    actions.appendChild(pinBtn);
     actions.appendChild(editBtn);
     actions.appendChild(delBtn);
     card.appendChild(actions);
@@ -253,7 +336,6 @@ function buildLinkCard_(link, isAdmin) {
   return card;
 }
 
-// เวลาไทยทั้งหมด (Asia/Bangkok)
 function formatThaiDate_(isoString) {
   if (!isoString) return "-";
   const d = new Date(isoString);
@@ -262,6 +344,61 @@ function formatThaiDate_(isoString) {
     dateStyle: "medium",
     timeStyle: "short"
   });
+}
+
+// ===================== DRAG & DROP REORDER (admin only) =====================
+function enableDragAndDrop_(grid) {
+  let draggedEl = null;
+
+  grid.querySelectorAll(".link-card").forEach(card => {
+    card.addEventListener("dragstart", () => {
+      draggedEl = card;
+      card.classList.add("dragging");
+    });
+    card.addEventListener("dragend", () => {
+      card.classList.remove("dragging");
+      draggedEl = null;
+      commitOrder_(grid);
+    });
+    card.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (!draggedEl || draggedEl === card) return;
+      const cards = [...grid.children];
+      const draggedIdx = cards.indexOf(draggedEl);
+      const targetIdx = cards.indexOf(card);
+      if (draggedIdx < targetIdx) {
+        grid.insertBefore(draggedEl, card.nextSibling);
+      } else {
+        grid.insertBefore(draggedEl, card);
+      }
+    });
+  });
+}
+
+async function commitOrder_(grid) {
+  const ids = [...grid.children].map(c => c.dataset.id).filter(Boolean);
+  if (ids.length < 2) return;
+  const orderPayload = ids.map((id, idx) => ({ id, order: idx * 10 }));
+  try {
+    await apiCall("reorderLinks", { order: orderPayload });
+    orderPayload.forEach(({ id, order }) => {
+      const link = allLinks.find(l => l.id === id);
+      if (link) link.order = order;
+    });
+  } catch (err) {
+    showToast_("จัดลำดับไม่สำเร็จ ❌");
+    bootstrap_();
+  }
+}
+
+async function togglePin_(link) {
+  try {
+    await apiCall("updateLink", { id: link.id, pinned: !link.pinned, order: -Date.now() });
+    showToast_(link.pinned ? "เลิกปักหมุดแล้ว" : "ปักหมุดแล้ว 📌");
+    await bootstrap_();
+  } catch (err) {
+    showToast_("ทำรายการไม่สำเร็จ ❌");
+  }
 }
 
 // ===================== EVENTS =====================
@@ -273,6 +410,7 @@ function bindStaticEvents_() {
   document.getElementById("linkForm").addEventListener("submit", handleLinkFormSubmit_);
   document.getElementById("linkFormCancel").addEventListener("click", resetLinkForm_);
   document.getElementById("configForm").addEventListener("submit", handleConfigSubmit_);
+  document.getElementById("themeToggleBtn").addEventListener("click", toggleTheme_);
   document.getElementById("searchInput").addEventListener("input", (e) => {
     searchQuery = e.target.value.trim();
     renderLinks_();
@@ -305,7 +443,7 @@ async function handleLoginSubmit_(e) {
   errorEl.classList.add("hidden");
 
   try {
-    const passwordHash = await sha256Hex(password); // hash ก่อนส่งเสมอ ไม่ส่ง plaintext
+    const passwordHash = await sha256Hex(password);
     const data = await apiCall("login", { username, passwordHash });
     currentToken = data.token;
     currentUser = data.user;
@@ -329,7 +467,6 @@ async function logout_() {
   renderAll_();
 }
 
-// ----- Add / Edit link form -----
 function startEditLink_(link) {
   document.getElementById("linkId").value = link.id;
   document.getElementById("linkTitle").value = link.title;
