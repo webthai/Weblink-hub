@@ -1,0 +1,326 @@
+/* ============================================================
+ *  LINK HUB - Frontend logic
+ *  - เรียก Apps Script Web App เป็น "database" ผ่าน fetch
+ *  - โหลดข้อมูลครั้งแรกด้วย action เดียว (bootstrap) เพื่อความเร็ว
+ *  - login แบบ hash รหัสผ่านด้วย SHA-256 ก่อนส่งเสมอ ไม่ส่ง plaintext
+ * ============================================================ */
+
+// ⚠️ ตั้งค่าตรงนี้ครั้งเดียว: ใส่ Web App URL ที่ได้จากการ Deploy Google Apps Script
+// เมื่อใส่ค่าตรงนี้แล้ว ทุกเครื่อง/เบราว์เซอร์ที่เปิดไฟล์นี้จะใช้ URL เดียวกันทันที ไม่ต้องตั้งค่าใหม่
+const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwIAMF5fQgpstdLaDzNit6Ixd0VZ2squ4SFwRqH6HnKkxo6-LBAM1kUNOFkkwbZn5LN/exec";
+
+const STORAGE_KEYS = {
+  scriptUrl: "linkhub_script_url",
+  token: "linkhub_token",
+  user: "linkhub_user"
+};
+
+let SCRIPT_URL = resolveScriptUrl_();
+let currentToken = localStorage.getItem(STORAGE_KEYS.token) || null;
+let currentUser = safeParse_(localStorage.getItem(STORAGE_KEYS.user));
+let allLinks = [];
+
+// ===================== INIT =====================
+document.addEventListener("DOMContentLoaded", () => {
+  bindStaticEvents_();
+  if (!SCRIPT_URL || SCRIPT_URL.indexOf("PASTE_YOUR_WEB_APP_URL_HERE") !== -1) {
+    showConfigModal_();
+    return;
+  }
+  bootstrap_();
+});
+
+function resolveScriptUrl_() {
+  const saved = localStorage.getItem(STORAGE_KEYS.scriptUrl);
+  if (saved) return saved;
+  if (DEFAULT_SCRIPT_URL && DEFAULT_SCRIPT_URL.indexOf("PASTE_YOUR_WEB_APP_URL_HERE") === -1) {
+    return DEFAULT_SCRIPT_URL;
+  }
+  return "";
+}
+
+function safeParse_(str) {
+  try { return str ? JSON.parse(str) : null; } catch (e) { return null; }
+}
+
+// ===================== API CALL =====================
+// ใช้ Content-Type: text/plain เพื่อเลี่ยง CORS preflight (Apps Script ไม่รองรับ OPTIONS)
+async function apiCall(action, payload) {
+  const body = Object.assign({ action }, payload || {});
+  if (currentToken) body.token = currentToken;
+
+  const res = await fetch(SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error("Network error: " + res.status);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || "Unknown error");
+  return data;
+}
+
+// ===================== SHA-256 (client-side hashing) =====================
+async function sha256Hex(message) {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+// ===================== BOOTSTRAP (single call for initial load) =====================
+async function bootstrap_() {
+  setLoading_(true);
+  try {
+    const data = await apiCall("bootstrap", {});
+    allLinks = data.links || [];
+    if (data.user) {
+      currentUser = data.user;
+      localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(currentUser));
+    } else {
+      // token หมดอายุหรือไม่ถูกต้อง -> เคลียร์สถานะ login ฝั่ง frontend
+      currentUser = null;
+      currentToken = null;
+      localStorage.removeItem(STORAGE_KEYS.token);
+      localStorage.removeItem(STORAGE_KEYS.user);
+    }
+    renderAll_();
+  } catch (err) {
+    console.error(err);
+    document.getElementById("loadingState").textContent =
+      "โหลดข้อมูลไม่สำเร็จ: " + err.message;
+  } finally {
+    setLoading_(false);
+  }
+}
+
+function setLoading_(isLoading) {
+  const el = document.getElementById("loadingState");
+  el.classList.toggle("hidden", !isLoading && allLinks.length >= 0);
+}
+
+// ===================== RENDER =====================
+function renderAll_() {
+  renderAuthUI_();
+  renderLinks_();
+}
+
+function renderAuthUI_() {
+  const loginBtn = document.getElementById("loginBtn");
+  const logoutBtn = document.getElementById("logoutBtn");
+  const userBadge = document.getElementById("userBadge");
+  const adminPanel = document.getElementById("adminPanel");
+
+  if (currentUser && currentUser.role === "admin") {
+    loginBtn.classList.add("hidden");
+    logoutBtn.classList.remove("hidden");
+    userBadge.textContent = "👤 " + currentUser.username;
+    userBadge.classList.remove("hidden");
+    adminPanel.classList.remove("hidden");
+  } else {
+    loginBtn.classList.remove("hidden");
+    logoutBtn.classList.add("hidden");
+    userBadge.classList.add("hidden");
+    adminPanel.classList.add("hidden");
+  }
+}
+
+function renderLinks_() {
+  const grid = document.getElementById("linksGrid");
+  const emptyState = document.getElementById("emptyState");
+  const loadingState = document.getElementById("loadingState");
+  const linkCount = document.getElementById("linkCount");
+  const lastUpdated = document.getElementById("lastUpdated");
+
+  loadingState.classList.add("hidden");
+  grid.innerHTML = "";
+
+  linkCount.textContent = allLinks.length ? `${allLinks.length} ลิงก์` : "";
+  emptyState.classList.toggle("hidden", allLinks.length !== 0);
+
+  const isAdmin = currentUser && currentUser.role === "admin";
+  let latest = null;
+
+  allLinks.forEach(link => {
+    if (!latest || new Date(link.updatedAt) > new Date(latest)) latest = link.updatedAt;
+    grid.appendChild(buildLinkCard_(link, isAdmin));
+  });
+
+  lastUpdated.textContent = latest ? formatThaiDate_(latest) : "-";
+}
+
+function buildLinkCard_(link, isAdmin) {
+  const card = document.createElement("div");
+  card.className = "link-card";
+
+  const title = document.createElement("a");
+  title.href = link.url;
+  title.target = "_blank";
+  title.rel = "noopener noreferrer";
+  title.className = "link-card-title";
+  title.textContent = link.title;
+  card.appendChild(title);
+
+  const urlEl = document.createElement("div");
+  urlEl.className = "link-card-url";
+  urlEl.textContent = link.url;
+  card.appendChild(urlEl);
+
+  if (link.description) {
+    const desc = document.createElement("div");
+    desc.className = "link-card-desc";
+    desc.textContent = link.description;
+    card.appendChild(desc);
+  }
+
+  const meta = document.createElement("div");
+  meta.className = "link-card-meta";
+  meta.textContent = "อัปเดต: " + formatThaiDate_(link.updatedAt);
+  card.appendChild(meta);
+
+  if (isAdmin) {
+    const actions = document.createElement("div");
+    actions.className = "link-card-admin-actions";
+
+    const editBtn = document.createElement("button");
+    editBtn.className = "btn-icon";
+    editBtn.textContent = "✏️ แก้ไข";
+    editBtn.onclick = () => startEditLink_(link);
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "btn-icon danger";
+    delBtn.textContent = "🗑️ ลบ";
+    delBtn.onclick = () => deleteLink_(link);
+
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+    card.appendChild(actions);
+  }
+
+  return card;
+}
+
+// เวลาไทยทั้งหมด (Asia/Bangkok)
+function formatThaiDate_(isoString) {
+  if (!isoString) return "-";
+  const d = new Date(isoString);
+  return d.toLocaleString("th-TH", {
+    timeZone: "Asia/Bangkok",
+    dateStyle: "medium",
+    timeStyle: "short"
+  });
+}
+
+// ===================== EVENTS =====================
+function bindStaticEvents_() {
+  document.getElementById("loginBtn").addEventListener("click", () => toggleModal_("loginModal", true));
+  document.getElementById("loginModalClose").addEventListener("click", () => toggleModal_("loginModal", false));
+  document.getElementById("logoutBtn").addEventListener("click", logout_);
+  document.getElementById("loginForm").addEventListener("submit", handleLoginSubmit_);
+  document.getElementById("linkForm").addEventListener("submit", handleLinkFormSubmit_);
+  document.getElementById("linkFormCancel").addEventListener("click", resetLinkForm_);
+  document.getElementById("configForm").addEventListener("submit", handleConfigSubmit_);
+}
+
+function toggleModal_(id, show) {
+  document.getElementById(id).classList.toggle("hidden", !show);
+}
+
+function showConfigModal_() {
+  toggleModal_("configModal", true);
+}
+
+async function handleConfigSubmit_(e) {
+  e.preventDefault();
+  const url = document.getElementById("configUrl").value.trim();
+  if (!url) return;
+  localStorage.setItem(STORAGE_KEYS.scriptUrl, url);
+  SCRIPT_URL = url;
+  toggleModal_("configModal", false);
+  bootstrap_();
+}
+
+async function handleLoginSubmit_(e) {
+  e.preventDefault();
+  const username = document.getElementById("loginUsername").value.trim();
+  const password = document.getElementById("loginPassword").value;
+  const errorEl = document.getElementById("loginError");
+  errorEl.classList.add("hidden");
+
+  try {
+    const passwordHash = await sha256Hex(password); // hash ก่อนส่งเสมอ ไม่ส่ง plaintext
+    const data = await apiCall("login", { username, passwordHash });
+    currentToken = data.token;
+    currentUser = data.user;
+    localStorage.setItem(STORAGE_KEYS.token, currentToken);
+    localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(currentUser));
+    toggleModal_("loginModal", false);
+    document.getElementById("loginForm").reset();
+    await bootstrap_();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove("hidden");
+  }
+}
+
+async function logout_() {
+  try { await apiCall("logout", {}); } catch (e) { /* ignore */ }
+  currentToken = null;
+  currentUser = null;
+  localStorage.removeItem(STORAGE_KEYS.token);
+  localStorage.removeItem(STORAGE_KEYS.user);
+  renderAll_();
+}
+
+// ----- Add / Edit link form -----
+function startEditLink_(link) {
+  document.getElementById("linkId").value = link.id;
+  document.getElementById("linkTitle").value = link.title;
+  document.getElementById("linkUrl").value = link.url;
+  document.getElementById("linkDesc").value = link.description || "";
+  document.getElementById("linkFormSubmit").textContent = "บันทึกการแก้ไข";
+  document.getElementById("linkFormCancel").classList.remove("hidden");
+  document.getElementById("adminPanel").scrollIntoView({ behavior: "smooth" });
+}
+
+function resetLinkForm_() {
+  document.getElementById("linkId").value = "";
+  document.getElementById("linkForm").reset();
+  document.getElementById("linkFormSubmit").textContent = "เพิ่มลิงก์";
+  document.getElementById("linkFormCancel").classList.add("hidden");
+  document.getElementById("linkFormError").classList.add("hidden");
+}
+
+async function handleLinkFormSubmit_(e) {
+  e.preventDefault();
+  const errorEl = document.getElementById("linkFormError");
+  errorEl.classList.add("hidden");
+
+  const id = document.getElementById("linkId").value;
+  const title = document.getElementById("linkTitle").value.trim();
+  const url = document.getElementById("linkUrl").value.trim();
+  const description = document.getElementById("linkDesc").value.trim();
+
+  try {
+    if (id) {
+      await apiCall("updateLink", { id, title, url, description });
+    } else {
+      await apiCall("addLink", { title, url, description });
+    }
+    resetLinkForm_();
+    await bootstrap_();
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove("hidden");
+  }
+}
+
+async function deleteLink_(link) {
+  if (!confirm(`ลบลิงก์ "${link.title}" ใช่หรือไม่?`)) return;
+  try {
+    await apiCall("deleteLink", { id: link.id });
+    await bootstrap_();
+  } catch (err) {
+    alert("ลบไม่สำเร็จ: " + err.message);
+  }
+}

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Link Hub</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <h1 class="brand" id="siteTitle">🔗 Link Hub</h1>
+      <div class="topbar-actions">
+        <span id="userBadge" class="user-badge hidden"></span>
+        <button id="loginBtn" class="btn btn-outline">Login</button>
+        <button id="logoutBtn" class="btn btn-outline hidden">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- ===== Admin panel: เพิ่มลิงก์ใหม่ (แสดงเฉพาะตอน login เป็น admin) ===== -->
+    <section id="adminPanel" class="admin-panel hidden">
+      <h2 class="section-title">เพิ่มลิงก์ใหม่</h2>
+      <form id="linkForm" class="link-form">
+        <input type="hidden" id="linkId" value="" />
+        <div class="form-row">
+          <label for="linkTitle">ชื่อเว็บ *</label>
+          <input type="text" id="linkTitle" placeholder="เช่น Gmail" required />
+        </div>
+        <div class="form-row">
+          <label for="linkUrl">ลิงก์เว็บ *</label>
+          <input type="url" id="linkUrl" placeholder="https://example.com" required />
+        </div>
+        <div class="form-row">
+          <label for="linkDesc">รายละเอียด (ไม่บังคับ)</label>
+          <textarea id="linkDesc" placeholder="คำอธิบายสั้นๆ"></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="submit" id="linkFormSubmit" class="btn btn-solid">เพิ่มลิงก์</button>
+          <button type="button" id="linkFormCancel" class="btn btn-outline hidden">ยกเลิกการแก้ไข</button>
+        </div>
+        <p id="linkFormError" class="form-error hidden"></p>
+      </form>
+    </section>
+
+    <!-- ===== Dashboard: แสดงลิงก์ทั้งหมด ===== -->
+    <section class="dashboard-section">
+      <div class="dashboard-header">
+        <h2 class="section-title">ลิงก์ทั้งหมด</h2>
+        <span id="linkCount" class="link-count"></span>
+      </div>
+      <div id="loadingState" class="loading-state">กำลังโหลด...</div>
+      <div id="emptyState" class="empty-state hidden">ยังไม่มีลิงก์ในระบบ</div>
+      <div id="linksGrid" class="links-grid"></div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <p>อัปเดตล่าสุด: <span id="lastUpdated">-</span> (เวลาไทย)</p>
+  </footer>
+
+  <!-- ===== Login Modal ===== -->
+  <div id="loginModal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <button id="loginModalClose" class="modal-close" aria-label="close">✕</button>
+      <h2 class="section-title">เข้าสู่ระบบ Admin</h2>
+      <form id="loginForm" class="link-form">
+        <div class="form-row">
+          <label for="loginUsername">Username</label>
+          <input type="text" id="loginUsername" autocomplete="username" required />
+        </div>
+        <div class="form-row">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" autocomplete="current-password" required />
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-solid">Login</button>
+        </div>
+        <p id="loginError" class="form-error hidden"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== ตั้งค่า Script URL (แสดงเฉพาะครั้งแรกที่ยังไม่ได้ตั้งค่า) ===== -->
+  <div id="configModal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h2 class="section-title">ตั้งค่า Apps Script URL</h2>
+      <p class="modal-hint">ใส่ Web App URL ที่ได้จากการ Deploy Google Apps Script (ทำครั้งเดียว ระบบจะจำไว้ในเบราว์เซอร์นี้)</p>
+      <form id="configForm" class="link-form">
+        <div class="form-row">
+          <label for="configUrl">Script URL</label>
+          <input type="url" id="configUrl" placeholder="https://script.google.com/macros/s/xxxx/exec" required />
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-solid">บันทึก</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
