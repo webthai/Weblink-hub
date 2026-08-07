@@ -6,10 +6,8 @@
  *  - รองรับ: คัดลอกลิงก์, dark mode, ปักหมุด/ลากจัดลำดับเอง (admin)
  * ============================================================ */
 
-
-// เมื่อใส่ค่าตรงนี้แล้ว ทุกเครื่อง/เบราว์เซอร์ที่เปิดไฟล์นี้จะใช้ URL เดียวกันทันที ไม่ต้องตั้งค่าใหม่
+// ⚠️ ตั้งค่าตรงนี้ครั้งเดียว: ใส่ Web App URL ที่ได้จากการ Deploy Google Apps Script
 const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwIAMF5fQgpstdLaDzNit6Ixd0VZ2squ4SFwRqH6HnKkxo6-LBAM1kUNOFkkwbZn5LN/exec";
->>>>>>> 61c3f5b99bcf2b3dfbee1751fbbc17cc9297c99d
 
 const STORAGE_KEYS = {
   scriptUrl: "linkhub_script_url",
