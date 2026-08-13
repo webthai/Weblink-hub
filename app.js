@@ -7,7 +7,7 @@
  * ============================================================ */
 
 // ⚠️ ตั้งค่าตรงนี้ครั้งเดียว: ใส่ Web App URL ที่ได้จากการ Deploy Google Apps Script
-const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwIAMF5fQgpstdLaDzNit6Ixd0VZ2squ4SFwRqH6HnKkxo6-LBAM1kUNOFkkwbZn5LN/exec";
+const DEFAULT_SCRIPT_URL = "PASTE_YOUR_WEB_APP_URL_HERE";
 
 const STORAGE_KEYS = {
   scriptUrl: "linkhub_script_url",
@@ -256,9 +256,12 @@ function buildLinkCard_(link, isAdmin) {
   const domain = getDomain_(link.url);
   if (domain) {
     const img = document.createElement("img");
-    img.src = `https://www.google.com/s2/favicons?sz=64&domain=${domain}`;
+    img.src = `https://www.google.com/s2/favicons?sz=32&domain=${domain}`;
     img.alt = "";
+    img.width = 20;
+    img.height = 20;
     img.loading = "lazy";
+    img.decoding = "async";
     img.onerror = () => { favicon.textContent = "🔗"; };
     favicon.appendChild(img);
   } else {

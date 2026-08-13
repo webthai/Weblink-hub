@@ -6,8 +6,11 @@
 <title>Link Hub</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="preconnect" href="https://script.google.com" />
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" /></noscript>
 <link rel="stylesheet" href="style.css" />
+<script src="app.js" defer></script>
 <script>
   // ตั้งค่าธีม (light/dark) ก่อนหน้าเว็บ render เพื่อไม่ให้กระพริบสีตอนโหลด
   (function () {
@@ -21,7 +24,7 @@
 
   <header class="topbar">
     <div class="topbar-inner">
-      <h1 class="brand" id="siteTitle">🔗 Link Hub</h1>
+      <h1 class="brand" id="siteTitle">Link Hub</h1>
       <div class="topbar-actions">
         <button id="themeToggleBtn" class="btn-icon-round" title="สลับธีมสว่าง/มืด">🌙</button>
         <span id="userBadge" class="user-badge hidden"></span>
@@ -128,6 +131,5 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
 </body>
 </html>
