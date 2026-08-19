@@ -244,6 +244,50 @@ function openLink_(url) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+function renderFavicon_(favicon, link, domain) {
+  const customIcon = (link.icon || "").trim();
+
+  if (customIcon) {
+    if (/^https?:\/\//i.test(customIcon)) {
+      const img = document.createElement("img");
+      img.src = customIcon;
+      img.alt = "";
+      img.width = 20;
+      img.height = 20;
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.onerror = () => { favicon.textContent = "🔗"; img.remove(); };
+      favicon.appendChild(img);
+    } else {
+      favicon.textContent = customIcon; // อีโมจิหรือข้อความสั้นๆ ที่กำหนดเอง
+    }
+    return;
+  }
+
+  if (!domain) {
+    favicon.textContent = "🔗";
+    return;
+  }
+
+  const img = document.createElement("img");
+  img.src = `https://www.google.com/s2/favicons?sz=32&domain=${domain}`;
+  img.alt = "";
+  img.width = 20;
+  img.height = 20;
+  img.loading = "lazy";
+  img.decoding = "async";
+  img.onerror = () => {
+    if (!img.dataset.triedFallback) {
+      img.dataset.triedFallback = "1";
+      img.src = `https://${domain}/favicon.ico`;
+    } else {
+      favicon.textContent = "🔗";
+      img.remove();
+    }
+  };
+  favicon.appendChild(img);
+}
+
 function buildLinkCard_(link, isAdmin) {
   const displayUrl = normalizeUrl_(link.url);
   const card = document.createElement("div");
@@ -266,27 +310,7 @@ function buildLinkCard_(link, isAdmin) {
   const favicon = document.createElement("div");
   favicon.className = "link-card-favicon";
   const domain = getDomain_(displayUrl);
-  if (domain) {
-    const img = document.createElement("img");
-    img.src = `https://www.google.com/s2/favicons?sz=32&domain=${domain}`;
-    img.alt = "";
-    img.width = 20;
-    img.height = 20;
-    img.loading = "lazy";
-    img.decoding = "async";
-    img.onerror = () => {
-      if (!img.dataset.triedFallback) {
-        img.dataset.triedFallback = "1";
-        img.src = `https://${domain}/favicon.ico`;
-      } else {
-        favicon.textContent = "🔗";
-        img.remove();
-      }
-    };
-    favicon.appendChild(img);
-  } else {
-    favicon.textContent = "🔗";
-  }
+  renderFavicon_(favicon, link, domain);
   head.appendChild(favicon);
 
   const titleWrap = document.createElement("div");
@@ -495,6 +519,7 @@ function startEditLink_(link) {
   document.getElementById("linkTitle").value = link.title;
   document.getElementById("linkUrl").value = link.url;
   document.getElementById("linkDesc").value = link.description || "";
+  document.getElementById("linkIcon").value = link.icon || "";
   document.getElementById("linkFormSubmit").textContent = "บันทึกการแก้ไข";
   document.getElementById("linkFormCancel").classList.remove("hidden");
   document.getElementById("adminPanel").scrollIntoView({ behavior: "smooth" });
@@ -503,6 +528,7 @@ function startEditLink_(link) {
 function resetLinkForm_() {
   document.getElementById("linkId").value = "";
   document.getElementById("linkForm").reset();
+  document.getElementById("linkIcon").value = "";
   document.getElementById("linkFormSubmit").textContent = "เพิ่มลิงก์";
   document.getElementById("linkFormCancel").classList.add("hidden");
   document.getElementById("linkFormError").classList.add("hidden");
@@ -517,12 +543,13 @@ async function handleLinkFormSubmit_(e) {
   const title = document.getElementById("linkTitle").value.trim();
   const url = normalizeUrl_(document.getElementById("linkUrl").value);
   const description = document.getElementById("linkDesc").value.trim();
+  const icon = document.getElementById("linkIcon").value.trim();
 
   try {
     if (id) {
-      await apiCall("updateLink", { id, title, url, description });
+      await apiCall("updateLink", { id, title, url, description, icon });
     } else {
-      await apiCall("addLink", { title, url, description });
+      await apiCall("addLink", { title, url, description, icon });
     }
     resetLinkForm_();
     await bootstrap_();

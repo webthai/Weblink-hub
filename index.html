@@ -53,13 +53,17 @@
           <label for="linkDesc">รายละเอียด (ไม่บังคับ)</label>
           <textarea id="linkDesc" placeholder="คำอธิบายสั้นๆ"></textarea>
         </div>
+        <div class="form-row">
+          <label for="linkIcon">ไอคอนกำหนดเอง (ไม่บังคับ)</label>
+          <input type="text" id="linkIcon" placeholder="พิมพ์อีโมจิ เช่น 🎮 หรือวางลิงก์รูปไอคอน" />
+        </div>
         <div class="form-actions">
           <button type="submit" id="linkFormSubmit" class="btn btn-solid">เพิ่มลิงก์</button>
           <button type="button" id="linkFormCancel" class="btn btn-outline hidden">ยกเลิกการแก้ไข</button>
         </div>
         <p id="linkFormError" class="form-error hidden"></p>
       </form>
-      <p class="admin-hint">💡 โหมด admin: ลากการ์ดเพื่อจัดลำดับเองได้ และกด 📌 เพื่อปักหมุดลิงก์สำคัญไว้บนสุด</p>
+      <p class="admin-hint">💡 โหมด admin: ลากการ์ดเพื่อจัดลำดับเองได้, กด 📌 เพื่อปักหมุด และใส่ "ไอคอนกำหนดเอง" ได้ถ้าเว็บนั้นไม่มี favicon หรืออยากใช้ไอคอนอื่น</p>
     </section>
 
     <!-- ===== ลิงก์ที่ปักหมุด ===== -->
