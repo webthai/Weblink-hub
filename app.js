@@ -229,17 +229,29 @@ function getDomain_(url) {
   try { return new URL(url).hostname; } catch (e) { return ""; }
 }
 
+// เติม https:// ให้อัตโนมัติถ้าผู้ใช้พิมพ์ลิงก์มาโดยไม่ใส่ protocol (เช่น "facebook.com")
+// ป้องกันปัญหา favicon/การเปิดลิงก์พังเพราะดึงโดเมนไม่ได้
+function normalizeUrl_(url) {
+  const trimmed = (url || "").trim();
+  if (!trimmed) return trimmed;
+  if (!/^https?:\/\//i.test(trimmed)) {
+    return "https://" + trimmed;
+  }
+  return trimmed;
+}
+
 function openLink_(url) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
 function buildLinkCard_(link, isAdmin) {
+  const displayUrl = normalizeUrl_(link.url);
   const card = document.createElement("div");
   card.className = "link-card";
-  card.title = "เปิด " + link.url;
+  card.title = "เปิด " + displayUrl;
   card.dataset.id = link.id;
   card.draggable = isAdmin;
-  card.addEventListener("click", () => openLink_(link.url));
+  card.addEventListener("click", () => openLink_(displayUrl));
 
   if (link.pinned) {
     const badge = document.createElement("span");
@@ -253,7 +265,7 @@ function buildLinkCard_(link, isAdmin) {
 
   const favicon = document.createElement("div");
   favicon.className = "link-card-favicon";
-  const domain = getDomain_(link.url);
+  const domain = getDomain_(displayUrl);
   if (domain) {
     const img = document.createElement("img");
     img.src = `https://www.google.com/s2/favicons?sz=32&domain=${domain}`;
@@ -262,7 +274,15 @@ function buildLinkCard_(link, isAdmin) {
     img.height = 20;
     img.loading = "lazy";
     img.decoding = "async";
-    img.onerror = () => { favicon.textContent = "🔗"; };
+    img.onerror = () => {
+      if (!img.dataset.triedFallback) {
+        img.dataset.triedFallback = "1";
+        img.src = `https://${domain}/favicon.ico`;
+      } else {
+        favicon.textContent = "🔗";
+        img.remove();
+      }
+    };
     favicon.appendChild(img);
   } else {
     favicon.textContent = "🔗";
@@ -279,7 +299,7 @@ function buildLinkCard_(link, isAdmin) {
 
   const urlEl = document.createElement("span");
   urlEl.className = "link-card-url";
-  urlEl.textContent = domain || link.url;
+  urlEl.textContent = domain || displayUrl;
   titleWrap.appendChild(urlEl);
 
   head.appendChild(titleWrap);
@@ -289,7 +309,7 @@ function buildLinkCard_(link, isAdmin) {
   copyBtn.className = "link-card-iconbtn link-card-copy";
   copyBtn.title = "คัดลอกลิงก์";
   copyBtn.textContent = "📋";
-  copyBtn.onclick = (e) => { e.stopPropagation(); copyToClipboard_(link.url); };
+  copyBtn.onclick = (e) => { e.stopPropagation(); copyToClipboard_(displayUrl); };
   head.appendChild(copyBtn);
 
   const openIcon = document.createElement("span");
@@ -495,7 +515,7 @@ async function handleLinkFormSubmit_(e) {
 
   const id = document.getElementById("linkId").value;
   const title = document.getElementById("linkTitle").value.trim();
-  const url = document.getElementById("linkUrl").value.trim();
+  const url = normalizeUrl_(document.getElementById("linkUrl").value);
   const description = document.getElementById("linkDesc").value.trim();
 
   try {
